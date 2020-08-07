@@ -1,0 +1,12 @@
+{
+    "create-terminals.commands": [
+        {
+            "cmd": "~/envs/default/bin/cqh_file_watcher --conf=playbooks/file_watcher/compile.json",
+            "name": "compile"
+        },
+        {
+            "name": "deploy",
+            "cmd": "~/envs/default/bin/inv c-push"
+        }
+    ]
+}

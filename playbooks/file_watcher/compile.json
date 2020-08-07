@@ -1,0 +1,9 @@
+{
+    "command_list": [
+        {
+            "pattern": ".*\\.go",
+            "command": "go build"
+        }
+    ],
+    "directory": "${DIRECTORY}"
+}
