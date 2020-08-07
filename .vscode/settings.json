@@ -6,7 +6,7 @@
         },
         {
             "name": "deploy",
-            "cmd": "~/envs/default/bin/inv c-push"
+            "cmd": "~/envs/default/bin/cqh_file_watcher --conf=playbooks/file_watcher/gd.json"
         }
     ]
 }

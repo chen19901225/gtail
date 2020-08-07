@@ -92,9 +92,9 @@ func (c *LogWatcher) Tail() {
 			var totalStr string
 			var totalSize int32 = 0
 			
-
+			buf := make([]byte, 1024)
 			for {
-				buf := make([]byte, 1024)
+				
 				n, _ := v.Read(buf)
 				if 0 == n {
 					break

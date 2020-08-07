@@ -1,0 +1,9 @@
+{
+    "command_list": [
+        {
+            "pattern": ".*\\.go",
+            "command": "~/envs/default/bin/inv c-push"
+        }
+    ],
+    "directory": "${DIRECTORY}"
+}
