@@ -1,0 +1,1 @@
+alias pmv="go build && mv ./gtail ~/soft/tail"
