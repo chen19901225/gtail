@@ -19,12 +19,27 @@ type LogWatcher struct {
 
 func NewLogWatcher(pattern string) *LogWatcher {
 	var obj = &LogWatcher{
-		Pattern:   pattern,
+		Pattern:   FormatPattern(pattern),
 		FileMap:   make(map[string]*os.File),
 		IsStopped: 0,
 	}
 	return obj
 
+}
+
+func FormatPattern(pattern string) string {
+	first := pattern[0]
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("fail to getwd")
+	}
+	if first == '.' {
+		return cwd + pattern[1:]
+	}
+	if first == '~' {
+		return os.Getenv("HOME") + pattern[1:]
+	}
+	return pattern
 }
 
 func (c *LogWatcher) Prepare() {
@@ -168,6 +183,7 @@ func (c *LogWatcher) Tail() {
 			return
 		}
 		var newFileMap = c.getInfo(c.Pattern)
+		// fmt.Printf("pattern:%s", c.Pattern)
 		fileMap := c.GetFileList(newFileMap)
 
 		for _, v := range fileMap {
