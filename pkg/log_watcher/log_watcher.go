@@ -100,10 +100,67 @@ func (c *LogWatcher) ReplaceWith(newFileMap map[string]*os.File) {
 	}
 }
 
+func (c *LogWatcher) ReplaceFileMap(newFileMap map[string]*os.File) {
+	// 替换本地的FileMap
+	err := func() error {
+
+		oldFileMap := c.FileMap
+		c.FileMap = newFileMap
+		for fileName, oldFile := range oldFileMap {
+			newFile, exists := newFileMap[fileName]
+			if !exists {
+				// 新文件列表里面没有
+				err := oldFile.Close()
+				if err != nil {
+					return err
+				}
+				continue
+			}
+
+			oldFileStat, err := os.Stat(oldFile.Name())
+			if err != nil {
+				return err
+			}
+			newFildStat, err := os.Stat(newFile.Name())
+			if err != nil {
+				return err
+			}
+
+			if os.SameFile(oldFileStat, newFildStat) {
+				// 文件一样
+				// fileMap[fileIndex] = oldFile
+				// fileIndex++
+				// continue
+				err := newFile.Close()
+				if err != nil {
+					return err
+				}
+				c.FileMap[fileName] = oldFile
+				continue
+			}
+			// 文件不一样
+			err = oldFile.Close()
+			if err != nil {
+				return err
+			}
+
+		}
+
+		return nil
+	}()
+	if err != nil {
+		// log.Panic(err)
+		panic(err)
+		// log.Panicf("ReplaceFileMap Error %v", err)
+	}
+
+}
+
 func (c *LogWatcher) GetFileList(newFileMap map[string]*os.File) map[int]*os.File {
 	/*
-		1. 添加新的
-		2. 移除旧的东西
+		    获取最终要遍历的文件
+			1. 添加新的
+			2. 移除旧的东西
 	*/
 	var fileMap = make(map[int]*os.File)
 	var fileIndex = 0
@@ -184,9 +241,10 @@ func (c *LogWatcher) Tail() {
 		}
 		var newFileMap = c.getInfo(c.Pattern)
 		// fmt.Printf("pattern:%s", c.Pattern)
-		fileMap := c.GetFileList(newFileMap)
+		// fileMap := c.GetFileList(newFileMap)
+		c.ReplaceFileMap(newFileMap)
 
-		for _, v := range fileMap {
+		for _, v := range c.FileMap {
 			// var totalStr string
 			var totalSize int32 = 0
 
@@ -198,14 +256,17 @@ func (c *LogWatcher) Tail() {
 				if 0 == n {
 					break
 				}
+				// io.copy
 				totalSize = totalSize + int32(n)
 				if totalSize > 0 {
 					if isFirst == 1 {
 						isFirst = 0
 						fmt.Printf("==================File:%s=================\n", v.Name())
+						// os.Stdout.WriteString(fmt.Sprintf(""))
 					}
 
 					fmt.Print(string(buf[:n]))
+					// io.Co
 
 				}
 				//totalStr = totalStr + string(buf[:n])
@@ -216,8 +277,10 @@ func (c *LogWatcher) Tail() {
 			// 	fmt.Print(totalStr)
 			// }
 		}
+		// 设置缓存的东西
 
-		time.Sleep(time.Millisecond * 10)
+		// 为什么这个程序偶尔，cpu会比较高，高达30-40%
+		time.Sleep(time.Millisecond * 10) // sleep10毫秒
 
 	}
 
