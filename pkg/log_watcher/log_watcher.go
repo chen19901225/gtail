@@ -280,7 +280,7 @@ func (c *LogWatcher) Tail() {
 		// 设置缓存的东西
 
 		// 为什么这个程序偶尔，cpu会比较高，高达30-40%
-		time.Sleep(time.Millisecond * 10) // sleep10毫秒
+		time.Sleep(time.Millisecond * 100) // sleep10毫秒
 
 	}
 
