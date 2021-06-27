@@ -139,6 +139,7 @@ func (c *LogWatcher) ReplaceFileMap(newFileMap map[string]*os.File) {
 				continue
 			}
 			// 文件不一样
+			c.FileMap[fileName] = newFile
 			err = oldFile.Close()
 			if err != nil {
 				return err
