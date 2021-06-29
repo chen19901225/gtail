@@ -2,6 +2,7 @@ package log_watcher
 
 import (
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -11,9 +12,14 @@ import (
 /*
 先暂时不实现 -n 10 这个参数
 */
+
+type watchFileInfo struct {
+	File *os.File
+	Stat *fs.FileInfo
+}
 type LogWatcher struct {
 	Pattern   string
-	FileMap   map[string]*os.File
+	FileMap   map[string]*watchFileInfo
 	IsStopped int16
 	Verbose   int
 }
@@ -21,7 +27,7 @@ type LogWatcher struct {
 func NewLogWatcher(pattern string, verbose int) *LogWatcher {
 	var obj = &LogWatcher{
 		Pattern:   FormatPattern(pattern),
-		FileMap:   make(map[string]*os.File),
+		FileMap:   make(map[string]*watchFileInfo),
 		IsStopped: 0,
 		Verbose:   verbose,
 	}
@@ -55,25 +61,24 @@ func (c *LogWatcher) Prepare() {
 	c.FileMap = c.getInfo(c.Pattern)
 }
 
-func (c *LogWatcher) ReplaceFileMap(newFileMap map[string]*os.File) {
+func (c *LogWatcher) ReplaceFileMap(newFileMap map[string]*watchFileInfo) {
 	// 替换本地的FileMap
 	err := func() error {
 
-		oldFileMap := make(map[string]*os.File)
-		for fileName, fileInfo := range c.FileMap {
-			oldFileMap[fileName] = fileInfo
-		}
+		oldFileMap := c.FileMap
+		var err error
+
 		// c.FileMap = newFileMap
-		c.FileMap = make(map[string]*os.File)
+		c.FileMap = make(map[string]*watchFileInfo)
 		for fileName, fileInfo := range newFileMap {
 			c.FileMap[fileName] = fileInfo
 		}
-		for fileName, oldFile := range oldFileMap {
-			newFile, exists := newFileMap[fileName]
+		for fileName, oldwatchFileInfo := range oldFileMap {
+			newWatchFileInfo, exists := newFileMap[fileName]
 			c.LogMessage("for file %s", fileName)
 			if !exists {
 				// 新文件列表里面没有
-				err := oldFile.Close()
+				err := oldwatchFileInfo.File.Close()
 				c.LogMessage("file %s does not exists", fileName)
 				if err != nil {
 					return err
@@ -81,28 +86,25 @@ func (c *LogWatcher) ReplaceFileMap(newFileMap map[string]*os.File) {
 				continue
 			}
 
-			oldFileStat, err := os.Stat(oldFile.Name())
-			if err != nil {
-				return err
-			}
-			newFildStat, err := os.Stat(newFile.Name())
-			if err != nil {
-				return err
-			}
+			// 不能这么判断,这个样子的话,两个文件始终是一样的呀
 
-			if os.SameFile(oldFileStat, newFildStat) {
+			// oldFileStat, err := os.Stat(oldFile.Name())
+			// if err != nil {
+			// 	return err
+			// }
+			// newFildStat, err := os.Stat(newFile.Name())
+			// if err != nil {
+			// 	return err
+			// }
+
+			if os.SameFile(*oldwatchFileInfo.Stat, *newWatchFileInfo.Stat) {
 				// 文件一样
-				// fileMap[fileIndex] = oldFile
-				// fileIndex++
-				// continue
 				c.LogMessage("%s is the same", fileName)
-				c.LogMessage(fmt.Sprintf("oldFileSys:%+v", oldFileStat.Sys()))
-				c.LogMessage(fmt.Sprintf("NewFileSys:%+v", oldFileStat.Sys()))
-				err := newFile.Close()
+				err := newWatchFileInfo.File.Close()
 				if err != nil {
 					return err
 				}
-				c.FileMap[fileName] = oldFile
+				c.FileMap[fileName] = oldwatchFileInfo
 				continue
 			}
 			// 文件不一样
@@ -111,12 +113,12 @@ func (c *LogWatcher) ReplaceFileMap(newFileMap map[string]*os.File) {
 			// 为什么没有日志呢?
 			// log.Printf("")
 			c.LogMessage("%s file recreate", fileName)
-			err = oldFile.Close()
+			err = oldwatchFileInfo.File.Close()
 			if err != nil {
 				return err
 			}
 			// c.FileMap[file
-			newFile.Seek(0, 0)
+			oldwatchFileInfo.File.Seek(0, 0)
 
 		}
 
@@ -130,8 +132,8 @@ func (c *LogWatcher) ReplaceFileMap(newFileMap map[string]*os.File) {
 
 }
 
-func (c *LogWatcher) getInfo(pattern string) map[string]*os.File {
-	var fileMap = make(map[string]*os.File)
+func (c *LogWatcher) getInfo(pattern string) map[string]*watchFileInfo {
+	var fileMap = make(map[string]*watchFileInfo)
 
 	matches, err := filepath.Glob(c.Pattern)
 	if err != nil {
@@ -146,21 +148,26 @@ func (c *LogWatcher) getInfo(pattern string) map[string]*os.File {
 		}
 		// 移动到最后
 		fileObj.Seek(0, 2)
-		fileMap[v] = fileObj
+		stat, err := os.Stat(fileObj.Name())
+		if err != nil {
+			log.Fatal(err)
+			return fileMap
+		}
+		fileMap[v] = &watchFileInfo{
+			File: fileObj,
+			Stat: &stat,
+		}
 	}
 
 	return fileMap
 }
 
 func (c *LogWatcher) Tail() {
-
 	for {
 		if c.IsStopped == 1 {
 			return
 		}
 		var newFileMap = c.getInfo(c.Pattern)
-		// fmt.Printf("pattern:%s", c.Pattern)
-		// fileMap := c.GetFileList(newFileMap)
 		c.ReplaceFileMap(newFileMap)
 		for name, _ := range newFileMap {
 			// log.Printf("name:%s", name)
@@ -175,7 +182,7 @@ func (c *LogWatcher) Tail() {
 			var isFirst = 1
 			for {
 
-				n, _ := v.Read(buf)
+				n, _ := v.File.Read(buf)
 				if 0 == n {
 					break
 				}
@@ -184,7 +191,7 @@ func (c *LogWatcher) Tail() {
 				if totalSize > 0 {
 					if isFirst == 1 {
 						isFirst = 0
-						fmt.Printf("==================File:%s=================\n", v.Name())
+						fmt.Printf("==================File:%s=================\n", v.File.Name())
 						// os.Stdout.WriteString(fmt.Sprintf(""))
 					}
 
