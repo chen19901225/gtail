@@ -12,6 +12,7 @@ import (
 
 func main() {
 	var pattern string
+	var isDebug int
 	app := &cli.App{
 		Name:  "gtail",
 		Usage: "golang tail",
@@ -22,6 +23,12 @@ func main() {
 				Required:    true,
 				Destination: &pattern,
 			},
+			&cli.IntFlag{
+				Name: "verbose",
+				Usage: "show log",
+				Value: 0,
+				Destination: &isDebug,
+			},
 		},
 		Action: func(c *cli.Context) error {
 			if len(pattern) == 0 {
@@ -29,7 +36,7 @@ func main() {
 				return nil
 			}
 
-			var logWatcher = log_watcher.NewLogWatcher(pattern)
+			var logWatcher = log_watcher.NewLogWatcher(pattern, isDebug)
 			logWatcher.Prepare()
 			logWatcher.Tail()
 
